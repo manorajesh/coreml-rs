@@ -3,6 +3,10 @@
 `coreml-rs` is an experimental Rust library aimed at providing Rust bindings for Apple's Core ML framework.
 Core ML is Apple's machine learning framework designed to integrate machine learning models into iOS, macOS, watchOS, and tvOS applications.
 
+### NOTES:
+
+`libswift_Concurrency.dylib` is required for the builds to work, put the dylib next to the built binary to run the process.
+
 ## Status
 
 This project is currently work in progress.
