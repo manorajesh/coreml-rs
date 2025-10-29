@@ -69,17 +69,22 @@ fn compile_swift() {
         cmd.args(&["-c", "release"]);
     }
 
-    let exit_status = cmd.spawn().unwrap().wait_with_output().unwrap();
+    let child = cmd.spawn().unwrap_or_else(|e| {
+        eprintln!("Failed to spawn swift build command: {}", e);
+        std::process::exit(1);
+    });
+    let exit_status = child.wait_with_output().unwrap_or_else(|e| {
+        eprintln!("Failed to wait for swift build: {}", e);
+        std::process::exit(1);
+    });
 
     if !exit_status.status.success() {
-        panic!(
-            r#"
-Stderr: {}
-Stdout: {}
-"#,
-            String::from_utf8(exit_status.stderr).unwrap(),
-            String::from_utf8(exit_status.stdout).unwrap(),
-        )
+        eprintln!(
+            "Swift build failed:\nStderr: {}\nStdout: {}",
+            String::from_utf8_lossy(&exit_status.stderr),
+            String::from_utf8_lossy(&exit_status.stdout),
+        );
+        std::process::exit(1);
     }
 }
 
