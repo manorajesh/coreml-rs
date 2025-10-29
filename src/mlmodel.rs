@@ -299,7 +299,6 @@ impl CoreMLModel {
     pub fn load_from_path(path: String, info: CoreMLModelInfo, compiled: bool) -> Self {
         let coreml_model = Self {
             model: modelWithPath(path, info.opts.compute_platform, compiled),
-            // save_path: None,
             outputs: Default::default(),
         };
         coreml_model
@@ -312,7 +311,6 @@ impl CoreMLModel {
                 buf.len() as isize,
                 info.opts.compute_platform,
             ),
-            // save_path: None,
             outputs: Default::default(),
         };
         std::mem::forget(buf);
@@ -342,7 +340,11 @@ impl CoreMLModel {
         }
         match input {
             MLArray::Float32Array(array_base) => {
-                let mut data = array_base.into_raw_vec();
+                let (mut data, offset) = array_base.into_raw_vec_and_offset();
+                assert!(
+                    matches!(offset, Some(0) | None),
+                    "array base offset is not zero; bad aligned input"
+                );
                 if !self
                     .model
                     .bindInputF32(shape, name, data.as_mut_ptr(), data.capacity())
@@ -354,7 +356,11 @@ impl CoreMLModel {
                 std::mem::forget(data);
             }
             MLArray::Float16Array(array_base) => {
-                let mut data = array_base.into_raw_vec();
+                let (mut data, offset) = array_base.into_raw_vec_and_offset();
+                assert!(
+                    matches!(offset, Some(0) | None),
+                    "array base offset is not zero; bad aligned input"
+                );
                 if !self.model.bindInputU16(
                     shape,
                     name,
@@ -368,7 +374,11 @@ impl CoreMLModel {
                 std::mem::forget(data);
             }
             MLArray::Int32Array(array_base) => {
-                let mut data = array_base.into_raw_vec();
+                let (mut data, offset) = array_base.into_raw_vec_and_offset();
+                assert!(
+                    matches!(offset, Some(0) | None),
+                    "array base offset is not zero; bad aligned input"
+                );
                 if !self
                     .model
                     .bindInputI32(shape, name, data.as_mut_ptr(), data.capacity())
@@ -398,7 +408,11 @@ impl CoreMLModel {
         self.outputs
             .insert(tag.as_ref().to_string(), ("f32", shape.to_vec()));
         let shape: Vec<i32> = shape.into_iter().map(|i| *i as i32).collect();
-        let mut data = arr.extract_to_tensor::<f32>().into_raw_vec();
+        let (mut data, offset) = arr.extract_to_tensor::<f32>().into_raw_vec_and_offset();
+        assert!(
+            matches!(offset, Some(0) | None),
+            "array base offset is not zero; bad aligned output buffer"
+        );
         let name = tag.as_ref().to_string();
         let ptr = data.as_mut_ptr();
         let len = data.capacity();
@@ -471,7 +485,11 @@ fn reinterpret_u16_to_f16(input: ndarray::ArrayD<u16>) -> ndarray::ArrayD<half::
     let len = input.len();
 
     // Consume input and get the raw Vec<u32>
-    let raw_vec = input.into_raw_vec();
+    let (raw_vec, offset) = input.into_raw_vec_and_offset();
+    assert!(
+        matches!(offset, Some(0) | None),
+        "array base offset is not zero; bad aligned data reinterpret"
+    );
 
     // SAFETY:
     // - u32 and f32 have the same size

@@ -30,45 +30,183 @@ coreml-rs = { version = "0.4", git = "https://github.com/swarnimarun/coreml-rs" 
 
 ## Usage
 
-Here's a basic example of how to use `coreml-rs` to load a Core ML model and perform inference:
+### Simple Inference
+
+Load a Core ML model from a `.mlmodel` file and perform a single inference:
 
 ```rust
 use coreml_rs::{ComputePlatform, CoreMLModelOptions, CoreMLModelWithState};
-use ndarray::{Array, Array4};
+use ndarray::Array4;
 
 pub fn main() {
     let file = std::fs::read("./demo/model_3.mlmodel").unwrap();
 
     let mut model_options = CoreMLModelOptions::default();
     model_options.compute_platform = ComputePlatform::CpuAndANE;
-    // model_options.cache_dir = PathBuf::from("."); // optional (generally not required, only use when you want to unload_to_disk)
+
     let mut model = CoreMLModelWithState::from_buf(file, model_options);
 
     let mut input = Array4::<f32>::zeros((1, 3, 512, 512));
-    // load in the input -- for brevity we just fill it with 1.0f32 to avoid using zeroes
     input.fill(1.0f32);
 
-    let Ok(w) = model.add_input("image", input.into_dyn()) else {
+    let Ok(_) = model.add_input("image", input.into_dyn()) else {
         panic!("failed to add input feature, `image` to the model");
     };
 
-    // Perform inference
     let output = model.predict();
 
-    // Process the output
     let v = output.unwrap().bytesFrom("output_1".to_string());
     let output: Array4<f32> = Array4::from_shape_vec([1, 3, 2048, 2048], v).unwrap();
 
-    // you can also unload/load model as needed to save in use memory
-    // model.unload(); model.load();
-
-    // you can also try to use unload_to_disk, to cache to disk the models to drastically reduce memory usage
-
-    // .. use output how ever you like
+    // Use output as needed
 }
 ```
 
-**Note**: This is a simplified example. Actual implementation may vary based on the model's input and output specifications.
+### Batch Inference
+
+Perform batch inference by adding multiple inputs:
+
+```rust
+use coreml_rs::{ComputePlatform, CoreMLModelOptions, CoreMLModelWithState};
+use ndarray::Array4;
+
+pub fn main() {
+    let file = std::fs::read("./demo/model_3.mlmodel").unwrap();
+
+    let mut model_options = CoreMLModelOptions::default();
+    model_options.compute_platform = ComputePlatform::CpuAndANE;
+
+    let mut model = CoreMLModelWithState::from_buf(file, model_options);
+
+    let mut input = Array4::<f32>::zeros((1, 3, 512, 512));
+    input.fill(1.0f32);
+
+    // Add multiple inputs for batch processing
+    for i in 0..10 {
+        let _ = model.add_input("image", input.clone().into_dyn(), i);
+    }
+
+    let output = model.predict().unwrap();
+
+    // Process batch outputs
+    for i in 0..10 {
+        let v = output.bytesFrom(&format!("output_1_{}", i));
+        let batch_output: Array4<f32> = Array4::from_shape_vec([1, 3, 2048, 2048], v).unwrap();
+        // Use batch_output as needed
+    }
+}
+```
+
+### Loading from Zip Archive
+
+Load a model from a zip archive containing an `.mlpackage`:
+
+```rust
+use coreml_rs::{ComputePlatform, CoreMLModelOptions, CoreMLModelWithState};
+use ndarray::Array4;
+use std::path::PathBuf;
+
+fn unzip_to_path_from_hash(buf: &[u8]) -> Option<PathBuf> {
+    fn get_cache_filename(model_buffer: &[u8]) -> String {
+        use sha2::Digest;
+        let mut hasher = sha2::Sha256::new();
+        hasher.update(model_buffer);
+        let hash = hasher.finalize();
+        format!("{:x}.mlpackage", hash)
+    }
+    let name = get_cache_filename(buf);
+
+    let path = PathBuf::from("/tmp/coreml-aftershoot/");
+    let path = path.join(name);
+    _ = std::fs::remove_dir_all(&path);
+    _ = std::fs::remove_file(&path);
+
+    let mut res = zip::ZipArchive::new(std::io::Cursor::new(buf)).ok()?;
+    res.extract(&path).ok()?;
+
+    let m = path.join("model.mlpackage");
+    if m.exists() {
+        Some(m)
+    } else {
+        None
+    }
+}
+
+pub fn main() {
+    let buf = std::fs::read("./demo/model_2.zip").unwrap();
+
+    let model_path = unzip_to_path_from_hash(&buf).unwrap();
+
+    let mut model_options = CoreMLModelOptions::default();
+    model_options.compute_platform = ComputePlatform::CpuAndANE;
+
+    let mut model = CoreMLModelWithState::new(model_path, model_options).load().unwrap();
+
+    let mut input = Array4::<f32>::zeros((1, 3, 512, 512));
+    input.fill(1.0f32);
+
+    let Ok(_) = model.add_input("image", input.into_dyn()) else {
+        panic!("failed to add input feature, `image` to the model");
+    };
+
+    let output = model.predict();
+
+    let v = output.unwrap().bytesFrom("output_1".to_string());
+    let output: Array4<f32> = Array4::from_shape_vec([1, 3, 2048, 2048], v).unwrap();
+
+    // Use output as needed
+}
+```
+
+### Memory Management
+
+Unload and reload models to manage memory usage:
+
+```rust
+use coreml_rs::{ComputePlatform, CoreMLModelOptions, CoreMLModelWithState};
+use ndarray::Array4;
+
+pub fn main() {
+    let file = std::fs::read("./demo/model_3.mlmodel").unwrap();
+
+    let mut model_options = CoreMLModelOptions::default();
+    model_options.compute_platform = ComputePlatform::CpuAndANE;
+
+    let mut model = CoreMLModelWithState::from_buf(file, model_options);
+
+    let mut input = Array4::<f32>::zeros((1, 3, 512, 512));
+    input.fill(1.0f32);
+
+    let Ok(_) = model.add_input("image", input.clone().into_dyn()) else {
+        panic!("failed to add input feature, `image` to the model");
+    };
+
+    let output = model.predict();
+
+    let v = output.unwrap().bytesFrom("output_1".to_string());
+    let output: Array4<f32> = Array4::from_shape_vec([1, 3, 2048, 2048], v).unwrap();
+
+    // Unload model to free memory
+    let unloaded_model = model.unload().unwrap();
+
+    // Later, reload the model
+    let mut model = unloaded_model.load().unwrap();
+
+    // Add input again and predict
+    let Ok(_) = model.add_input("image", input.into_dyn()) else {
+        panic!("failed to add input feature, `image` to the model");
+    };
+
+    let output = model.predict();
+
+    let v = output.unwrap().bytesFrom("output_1".to_string());
+    let output: Array4<f32> = Array4::from_shape_vec([1, 3, 2048, 2048], v).unwrap();
+
+    // Use output as needed
+}
+```
+
+**Note**: These examples assume specific model inputs/outputs. Adjust based on your model's specifications.
 
 ## Contributing
 

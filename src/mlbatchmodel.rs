@@ -281,7 +281,11 @@ impl CoreMLBatchModel {
         }
         match input {
             MLArray::Float32Array(array_base) => {
-                let mut data = array_base.into_raw_vec();
+                let (mut data, offset) = array_base.into_raw_vec_and_offset();
+                assert!(
+                    matches!(offset, Some(0) | None),
+                    "array base offset is not zero; bad aligned input"
+                );
                 if !self
                     .model
                     .bindInputF32(shape, name, data.as_mut_ptr(), data.capacity(), idx)

@@ -62,6 +62,8 @@ class BatchModel: @unchecked Sendable {
 		if hasFailedToLoad() { return false }
 		let config = MLModelConfiguration.init()
 		config.computeUnits = self.computeUnits
+		// IMPORTANT: disable experimentalMLE5EngineUsage, seems to cause crash on newer MacOS versions
+		config.setValue(1, forKey: "experimentalMLE5EngineUsage")
 		do {
 			if self.compiledPath == nil {
 				let semaphore = DispatchSemaphore(value: 0)
@@ -396,6 +398,22 @@ func initWithPath(path: RustString, compute: ComputePlatform, compiled: Bool) ->
 	m.compiledPath = compiledPath
 	m.computeUnits = computeUnits
 	return m
+}
+
+// Compile model and overwrite the file to the permanent location, replacing it if necessary
+func compileToPath(model: RustString, to: RustString, name: RustString) -> Bool {
+	let url = URL(string: model.toString())!
+	do {
+		let compiledPath = try MLModel.compileModel(at: url)
+		let fileManager = FileManager.default
+		let appSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+		print(appSupportURL)
+		let permanentURL = appSupportURL.appendingPathComponent(name.toString())
+		_ = try fileManager.replaceItemAt(permanentURL, withItemAt: compiledPath)
+	} catch {
+		return false
+	}
+	return true
 }
 
 func initWithPathBatch(path: RustString, compute: ComputePlatform, compiled: Bool) -> BatchModel {
