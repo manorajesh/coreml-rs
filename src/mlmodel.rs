@@ -1,15 +1,11 @@
 use crate::{
-    ffi::{modelWithAssets, modelWithPath, ComputePlatform, Model},
+    ffi::{ modelWithAssets, modelWithPath, ComputePlatform, Model },
     mlarray::MLArray,
     mlbatchmodel::CoreMLBatchModelWithState,
 };
 use flate2::Compression;
 use ndarray::Array;
-use std::{
-    collections::HashMap,
-    io::{Read, Write},
-    path::{Path, PathBuf},
-};
+use std::{ collections::HashMap, io::{ Read, Write }, path::{ Path, PathBuf } };
 use tempfile::NamedTempFile;
 
 pub use crate::swift::MLModelOutput;
@@ -19,26 +15,30 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 #[non_exhaustive]
 pub enum CoreMLError {
-    #[error("CoreML Cache IoError: {0}")]
-    IoError(std::io::Error),
-    #[error("BadInputShape: {0}")]
-    BadInputShape(String),
+    #[error("CoreML Cache IoError: {0}")] IoError(std::io::Error),
+    #[error("BadInputShape: {0}")] BadInputShape(String),
     // #[error("Lz4 Decompression Error: {0}")]
     // Lz4DecompressError(DecompressError),
-    #[error("UnknownError: {0}")]
-    UnknownError(String),
-    #[error("UnknownError: {0}")]
-    UnknownErrorStatic(&'static str),
+    #[error("UnknownError: {0}")] UnknownError(String),
+    #[error("UnknownError: {0}")] UnknownErrorStatic(&'static str),
     #[error("ModelNotLoaded: coreml model not loaded into session")]
     ModelNotLoaded,
-    #[error("FailedToLoad: coreml model couldn't be loaded: {0}")]
-    FailedToLoadStatic(&'static str, CoreMLModelWithState),
-    #[error("FailedToLoad: coreml model couldn't be loaded: {0}")]
-    FailedToLoad(String, CoreMLModelWithState),
-    #[error("FailedToLoadBatch: coreml model couldn't be loaded: {0}")]
-    FailedToLoadBatchStatic(&'static str, CoreMLBatchModelWithState),
-    #[error("FailedToLoadBatch: coreml model couldn't be loaded: {0}")]
-    FailedToBatchLoad(String, CoreMLBatchModelWithState),
+    #[error("FailedToLoad: coreml model couldn't be loaded: {0}")] FailedToLoadStatic(
+        &'static str,
+        CoreMLModelWithState,
+    ),
+    #[error("FailedToLoad: coreml model couldn't be loaded: {0}")] FailedToLoad(
+        String,
+        CoreMLModelWithState,
+    ),
+    #[error("FailedToLoadBatch: coreml model couldn't be loaded: {0}")] FailedToLoadBatchStatic(
+        &'static str,
+        CoreMLBatchModelWithState,
+    ),
+    #[error("FailedToLoadBatch: coreml model couldn't be loaded: {0}")] FailedToBatchLoad(
+        String,
+        CoreMLBatchModelWithState,
+    ),
 }
 
 #[derive(Default, Clone)]
@@ -50,14 +50,11 @@ pub struct CoreMLModelOptions {
 impl std::fmt::Debug for CoreMLModelOptions {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CoreMLModelOptions")
-            .field(
-                "compute_platform",
-                match self.compute_platform {
-                    ComputePlatform::Cpu => &"CPU",
-                    ComputePlatform::CpuAndANE => &"CpuAndAne",
-                    ComputePlatform::CpuAndGpu => &"CpuAndGpu",
-                },
-            )
+            .field("compute_platform", match self.compute_platform {
+                ComputePlatform::Cpu => &"CPU",
+                ComputePlatform::CpuAndANE => &"CpuAndAne",
+                ComputePlatform::CpuAndGpu => &"CpuAndGpu",
+            })
             .finish()
     }
 }
@@ -83,13 +80,13 @@ impl CoreMLModelWithState {
     pub fn new(path: impl AsRef<Path>, opts: CoreMLModelOptions) -> Self {
         Self::Unloaded(
             CoreMLModelInfo { opts },
-            CoreMLModelLoader::ModelPath(path.as_ref().to_path_buf()),
+            CoreMLModelLoader::ModelPath(path.as_ref().to_path_buf())
         )
     }
     pub fn new_compiled(path: impl AsRef<Path>, opts: CoreMLModelOptions) -> Self {
         Self::Unloaded(
             CoreMLModelInfo { opts },
-            CoreMLModelLoader::CompiledPath(path.as_ref().to_path_buf()),
+            CoreMLModelLoader::CompiledPath(path.as_ref().to_path_buf())
         )
     }
 
@@ -106,67 +103,78 @@ impl CoreMLModelWithState {
                 let mut coreml_model = CoreMLModel::load_from_path(
                     path_buf.display().to_string(),
                     info.clone(),
-                    false,
+                    false
                 );
                 if !coreml_model.model.load() {
-                    return Err(CoreMLError::FailedToLoadStatic(
-                        "Failed to load model; model path not valid",
-                        Self::Unloaded(info, CoreMLModelLoader::ModelPath(path_buf)),
-                    ));
+                    return Err(
+                        CoreMLError::FailedToLoadStatic(
+                            "Failed to load model; model path not valid",
+                            Self::Unloaded(info, CoreMLModelLoader::ModelPath(path_buf))
+                        )
+                    );
                 }
-                Ok(Self::Loaded(
-                    coreml_model,
-                    info,
-                    CoreMLModelLoader::ModelPath(path_buf),
-                ))
+                Ok(Self::Loaded(coreml_model, info, CoreMLModelLoader::ModelPath(path_buf)))
             }
             CoreMLModelLoader::CompiledPath(path_buf) => {
-                let mut coreml_model =
-                    CoreMLModel::load_from_path(path_buf.display().to_string(), info.clone(), true);
+                let mut coreml_model = CoreMLModel::load_from_path(
+                    path_buf.display().to_string(),
+                    info.clone(),
+                    true
+                );
                 if !coreml_model.model.load() {
-                    return Err(CoreMLError::FailedToLoadStatic(
-                        "Failed to load model; compiled model cache got purged",
-                        Self::Unloaded(info, CoreMLModelLoader::CompiledPath(path_buf)),
-                    ));
+                    return Err(
+                        CoreMLError::FailedToLoadStatic(
+                            "Failed to load model; compiled model cache got purged",
+                            Self::Unloaded(info, CoreMLModelLoader::CompiledPath(path_buf))
+                        )
+                    );
                 }
-                Ok(Self::Loaded(
-                    coreml_model,
-                    info,
-                    CoreMLModelLoader::CompiledPath(path_buf),
-                ))
+                Ok(Self::Loaded(coreml_model, info, CoreMLModelLoader::CompiledPath(path_buf)))
             }
             CoreMLModelLoader::Buffer(vec) => {
                 let mut coreml_model = CoreMLModel::load_buffer(vec.clone(), info.clone());
                 coreml_model.model.load();
                 if coreml_model.model.failed() {
-                    return Err(CoreMLError::FailedToLoadStatic(
-                        "Failed to load model; likely not a CoreML mlmodel file",
-                        Self::Unloaded(info, CoreMLModelLoader::Buffer(vec)),
-                    ));
+                    return Err(
+                        CoreMLError::FailedToLoadStatic(
+                            "Failed to load model; likely not a CoreML mlmodel file",
+                            Self::Unloaded(info, CoreMLModelLoader::Buffer(vec))
+                        )
+                    );
                 }
                 let loader = CoreMLModelLoader::Buffer(vec);
                 Ok(Self::Loaded(coreml_model, info, loader))
             }
             CoreMLModelLoader::BufferToDisk(u) => {
-                match std::fs::File::open(&u)
-                    .map_err(|io| CoreMLError::IoError(io))
-                    .and_then(|file| {
-                        let mut vec = vec![];
-                        _ = flate2::read::ZlibDecoder::new(file)
-                            .read_to_end(&mut vec)
-                            .map_err(|io| CoreMLError::IoError(io))?;
-                        Ok(vec)
-                    }) {
+                match
+                    std::fs::File
+                        ::open(&u)
+                        .map_err(|io| CoreMLError::IoError(io))
+                        .and_then(|file| {
+                            let mut vec = vec![];
+                            _ = flate2::read::ZlibDecoder
+                                ::new(file)
+                                .read_to_end(&mut vec)
+                                .map_err(|io| CoreMLError::IoError(io))?;
+                            Ok(vec)
+                        })
+                {
                     Ok(vec) => {
                         let mut coreml_model = CoreMLModel::load_buffer(vec, info.clone());
                         coreml_model.model.load();
                         let loader = CoreMLModelLoader::BufferToDisk(u);
                         Ok(Self::Loaded(coreml_model, info, loader))
                     }
-                    Err(err) => Err(CoreMLError::FailedToLoad(
-                        format!("failed to load the model from cached buffer path: {err}"),
-                        CoreMLModelWithState::Unloaded(info, CoreMLModelLoader::BufferToDisk(u)),
-                    )),
+                    Err(err) =>
+                        Err(
+                            CoreMLError::FailedToLoad(
+                                format!("failed to load the model from cached buffer path: {err}"),
+                                CoreMLModelWithState::Unloaded(
+                                    info,
+                                    CoreMLModelLoader::BufferToDisk(u)
+                                )
+                            )
+                        ),
                 }
             }
         }
@@ -175,9 +183,8 @@ impl CoreMLModelWithState {
     /// Might fail irrecoverably if the system is too low on disk space(very unlikely)
     pub fn unload(self) -> Result<Self, CoreMLError> {
         if let Self::Loaded(model, info, loader) = self {
-            Ok(Self::Unloaded(
-                info,
-                match loader {
+            Ok(
+                Self::Unloaded(info, match loader {
                     CoreMLModelLoader::Buffer(v) => {
                         let mut temp_file = NamedTempFile::new().map_err(CoreMLError::IoError)?;
                         temp_file.write_all(&v).map_err(CoreMLError::IoError)?;
@@ -190,8 +197,8 @@ impl CoreMLModelWithState {
                         CoreMLModelLoader::CompiledPath(path.into())
                     }
                     x => x,
-                },
-            ))
+                })
+            )
         } else {
             Ok(self)
         }
@@ -217,24 +224,32 @@ impl CoreMLModelWithState {
                             } else {
                                 info.opts.cache_dir.join("model_cache")
                             };
-                            match std::fs::File::create(&m)
-                                .map_err(|io| CoreMLError::IoError(io))
-                                .map(|file| {
-                                    flate2::write::ZlibEncoder::new(file, Compression::best())
-                                        .write_all(&vec)
-                                        .map_err(CoreMLError::IoError)
-                                }) {
+                            match
+                                std::fs::File
+                                    ::create(&m)
+                                    .map_err(|io| CoreMLError::IoError(io))
+                                    .map(|file| {
+                                        flate2::write::ZlibEncoder
+                                            ::new(file, Compression::best())
+                                            .write_all(&vec)
+                                            .map_err(CoreMLError::IoError)
+                                    })
+                            {
                                 Ok(_) => {}
                                 Err(err) => {
-                                    return Err(CoreMLError::FailedToLoad(
-                                        format!("failed to load the model from the buffer: {err}"),
-                                        CoreMLModelWithState::Unloaded(
-                                            info,
-                                            CoreMLModelLoader::Buffer(vec),
-                                        ),
-                                    ));
+                                    return Err(
+                                        CoreMLError::FailedToLoad(
+                                            format!(
+                                                "failed to load the model from the buffer: {err}"
+                                            ),
+                                            CoreMLModelWithState::Unloaded(
+                                                info,
+                                                CoreMLModelLoader::Buffer(vec)
+                                            )
+                                        )
+                                    );
                                 }
-                            };
+                            }
                             CoreMLModelLoader::BufferToDisk(m)
                         }
                         loader => loader,
@@ -255,7 +270,7 @@ impl CoreMLModelWithState {
     pub fn add_input(
         &mut self,
         tag: impl AsRef<str>,
-        input: impl Into<MLArray>,
+        input: impl Into<MLArray>
     ) -> Result<(), CoreMLError> {
         match self {
             CoreMLModelWithState::Unloaded(_, _) => Err(CoreMLError::ModelNotLoaded),
@@ -305,7 +320,7 @@ impl CoreMLModel {
             model: modelWithAssets(
                 buf.as_mut_ptr(),
                 buf.len() as isize,
-                info.opts.compute_platform,
+                info.opts.compute_platform
             ),
             outputs: Default::default(),
         };
@@ -316,7 +331,7 @@ impl CoreMLModel {
     pub fn add_input(
         &mut self,
         tag: impl AsRef<str>,
-        input: impl Into<MLArray>,
+        input: impl Into<MLArray>
     ) -> Result<(), CoreMLError> {
         // route input correctly
         let input: MLArray = input.into();
@@ -326,13 +341,13 @@ impl CoreMLModel {
         let arr = desc.input_shape(name.clone());
         if arr.len() != shape.len() || !arr.iter().eq(shape.iter()) {
             if arr.len() == 0 {
-                return Err(CoreMLError::BadInputShape(format!(
-                    "Input feature name '{name}' not expected!"
-                )));
+                return Err(
+                    CoreMLError::BadInputShape(format!("Input feature name '{name}' not expected!"))
+                );
             }
-            return Err(CoreMLError::BadInputShape(format!(
-                "expected shape {arr:?} found {shape:?}"
-            )));
+            return Err(
+                CoreMLError::BadInputShape(format!("expected shape {arr:?} found {shape:?}"))
+            );
         }
         match input {
             MLArray::Float32Array(array_base) => {
@@ -341,13 +356,8 @@ impl CoreMLModel {
                     matches!(offset, Some(0) | None),
                     "array base offset is not zero; bad aligned input"
                 );
-                if !self
-                    .model
-                    .bindInputF32(shape, name, data.as_mut_ptr(), data.capacity())
-                {
-                    return Err(CoreMLError::UnknownErrorStatic(
-                        "failed to bind input to model",
-                    ));
+                if !self.model.bindInputF32(shape, name, data.as_mut_ptr(), data.capacity()) {
+                    return Err(CoreMLError::UnknownErrorStatic("failed to bind input to model"));
                 }
                 std::mem::forget(data);
             }
@@ -357,15 +367,15 @@ impl CoreMLModel {
                     matches!(offset, Some(0) | None),
                     "array base offset is not zero; bad aligned input"
                 );
-                if !self.model.bindInputU16(
-                    shape,
-                    name,
-                    data.as_mut_ptr() as *mut u16,
-                    data.capacity(),
-                ) {
-                    return Err(CoreMLError::UnknownErrorStatic(
-                        "failed to bind input to model",
-                    ));
+                if
+                    !self.model.bindInputU16(
+                        shape,
+                        name,
+                        data.as_mut_ptr() as *mut u16,
+                        data.capacity()
+                    )
+                {
+                    return Err(CoreMLError::UnknownErrorStatic("failed to bind input to model"));
                 }
                 std::mem::forget(data);
             }
@@ -375,25 +385,18 @@ impl CoreMLModel {
                     matches!(offset, Some(0) | None),
                     "array base offset is not zero; bad aligned input"
                 );
-                if !self
-                    .model
-                    .bindInputI32(shape, name, data.as_mut_ptr(), data.capacity())
-                {
-                    return Err(CoreMLError::UnknownErrorStatic(
-                        "failed to bind input to model",
-                    ));
+                if !self.model.bindInputI32(shape, name, data.as_mut_ptr(), data.capacity()) {
+                    return Err(CoreMLError::UnknownErrorStatic("failed to bind input to model"));
                 }
                 std::mem::forget(data);
             }
             _ => {
-                return Err(CoreMLError::UnknownErrorStatic(
-                    "failed to bind input to model",
-                ));
+                return Err(CoreMLError::UnknownErrorStatic("failed to bind input to model"));
             } // MLArray::Int16Array(array_base) => todo!(),
-              // MLArray::Int8Array(array_base) => todo!(),
-              // MLArray::UInt32Array(array_base) => todo!(),
-              // MLArray::UInt16Array(array_base) => todo!(),
-              // MLArray::UInt8Array(array_base) => todo!(),
+            // MLArray::Int8Array(array_base) => todo!(),
+            // MLArray::UInt32Array(array_base) => todo!(),
+            // MLArray::UInt16Array(array_base) => todo!(),
+            // MLArray::UInt8Array(array_base) => todo!(),
         }
         Ok(())
     }
@@ -401,9 +404,11 @@ impl CoreMLModel {
     pub fn add_output_f32(&mut self, tag: impl AsRef<str>, out: impl Into<MLArray>) -> bool {
         let arr: MLArray = out.into();
         let shape = arr.shape();
-        self.outputs
-            .insert(tag.as_ref().to_string(), ("f32", shape.to_vec()));
-        let shape: Vec<i32> = shape.into_iter().map(|i| *i as i32).collect();
+        self.outputs.insert(tag.as_ref().to_string(), ("f32", shape.to_vec()));
+        let shape: Vec<i32> = shape
+            .into_iter()
+            .map(|i| *i as i32)
+            .collect();
         let (mut data, offset) = arr.extract_to_tensor::<f32>().into_raw_vec_and_offset();
         assert!(
             matches!(offset, Some(0) | None),
@@ -419,6 +424,29 @@ impl CoreMLModel {
         true
     }
 
+    pub fn add_output_u16(&mut self, tag: impl AsRef<str>, out: impl Into<MLArray>) -> bool {
+        let arr: MLArray = out.into();
+        let shape = arr.shape();
+        self.outputs.insert(tag.as_ref().to_string(), ("f16", shape.to_vec()));
+        let shape: Vec<i32> = shape
+            .into_iter()
+            .map(|i| *i as i32)
+            .collect();
+        let (mut data, offset) = arr.extract_to_tensor::<u16>().into_raw_vec_and_offset();
+        assert!(
+            matches!(offset, Some(0) | None),
+            "array base offset is not zero; bad aligned output buffer"
+        );
+        let name = tag.as_ref().to_string();
+        let ptr = data.as_mut_ptr();
+        let len = data.capacity();
+        if !self.model.bindOutputU16(shape, name, ptr, len) {
+            return false;
+        }
+        std::mem::forget(data);
+        true
+    }
+
     pub fn predict(&mut self) -> Result<MLModelOutput, CoreMLError> {
         let desc = self.model.description();
         for name in desc.output_names() {
@@ -428,10 +456,15 @@ impl CoreMLModel {
                 "f32" => {
                     self.add_output_f32(name, Array::<f32, _>::zeros(output_shape));
                 }
+                "f16" | "float16" => {
+                    self.add_output_u16(name, Array::<u16, _>::zeros(output_shape));
+                }
                 _ => {
-                    return Err(CoreMLError::UnknownErrorStatic(
-                        "non-f32 output types are not supported (yet)!",
-                    ))
+                    return Err(
+                        CoreMLError::UnknownErrorStatic(
+                            "non-f32/f16 output types are not supported (yet)!"
+                        )
+                    );
                 }
             }
         }
@@ -440,8 +473,7 @@ impl CoreMLModel {
             return Err(CoreMLError::UnknownError(err));
         }
         Ok(MLModelOutput {
-            outputs: self
-                .outputs
+            outputs: self.outputs
                 .clone()
                 .into_iter()
                 .filter_map(|(key, (ty, shape))| {
@@ -454,11 +486,15 @@ impl CoreMLModel {
                         }
                         "f16" => {
                             let out = output.outputU16(name);
-                            let array = reinterpret_u16_to_f16(Array::from_shape_vec(shape, out).ok()?);
+                            let array = reinterpret_u16_to_f16(
+                                Array::from_shape_vec(shape, out).ok()?
+                            );
                             Some((key, array.into()))
                         }
                         _ => {
-                            eprintln!("warning: type not one of f32 or f16, and will be skipped in the output");
+                            eprintln!(
+                                "warning: type not one of f32 or f16, and will be skipped in the output"
+                            );
                             return None;
                         }
                     }

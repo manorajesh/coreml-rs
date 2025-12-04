@@ -178,6 +178,9 @@ class ModelDescription {
 			if res.multiArrayConstraint!.dataType == MLMultiArrayDataType.float32 {
 				return "f32".intoRustString()
 			}
+			if res.multiArrayConstraint!.dataType == MLMultiArrayDataType.float16 {
+				return "f16".intoRustString()
+			}
 		}
 		return "".intoRustString()
 	}
@@ -536,6 +539,37 @@ class Model: @unchecked Sendable {
 			}
 			let array = try MLMultiArray.init(
 				dataPointer: data, shape: arr, dataType: MLMultiArrayDataType.float32,
+				strides: stride, deallocator: deallocMultiArrayRust)
+			self.outputs[featureName.toString()] = array
+			return true
+		} catch {
+			print("Unexpected output error: \(error)")
+			return false
+		}
+	}
+
+	func bindOutputU16(
+		shape: RustVec<Int32>, featureName: RustString, data: UnsafeMutablePointer<UInt16>,
+		len: UInt
+	) -> Bool {
+		if hasFailedToLoad() { return false }
+		do {
+			var arr: [NSNumber] = []
+			var stride: [NSNumber] = []
+			var m: Int32 = 1
+			for i in shape.reversed() {
+				stride.append(NSNumber(value: m))
+				m = i * m
+			}
+			stride.reverse()
+			for s in shape {
+				arr.append(NSNumber(value: s))
+			}
+			let deallocMultiArrayRust = { (_ ptr: UnsafeMutableRawPointer) in
+				()
+			}
+			let array = try MLMultiArray.init(
+				dataPointer: data, shape: arr, dataType: MLMultiArrayDataType.float16,
 				strides: stride, deallocator: deallocMultiArrayRust)
 			self.outputs[featureName.toString()] = array
 			return true

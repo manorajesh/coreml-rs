@@ -34,13 +34,13 @@ pub mod swift {
         pub fn modelWithAssetsBatch(
             ptr: *mut u8,
             len: isize,
-            compute: ComputePlatform,
+            compute: ComputePlatform
         ) -> BatchModel;
         #[swift_bridge(swift_name = "initWithPathBatch")]
         pub fn modelWithPathBatch(
             path: String,
             compute: ComputePlatform,
-            compiled: bool,
+            compiled: bool
         ) -> BatchModel;
     }
 
@@ -66,11 +66,10 @@ pub mod swift {
             featureName: String,
             data: *mut f32,
             len: usize,
-            idx: isize,
+            idx: isize
         ) -> bool;
         #[swift_bridge(swift_name = "hasFailedToLoad")]
         fn failed(&self) -> bool;
-
     }
 
     extern "Swift" {
@@ -82,7 +81,15 @@ pub mod swift {
             shape: Vec<i32>,
             featureName: String,
             data: *mut f32,
-            len: usize,
+            len: usize
+        ) -> bool;
+        #[must_use()]
+        fn bindOutputU16(
+            &self,
+            shape: Vec<i32>,
+            featureName: String,
+            data: *mut u16,
+            len: usize
         ) -> bool;
         #[must_use()]
         fn bindInputF32(
@@ -90,7 +97,7 @@ pub mod swift {
             shape: Vec<usize>,
             featureName: String,
             data: *mut f32,
-            len: usize,
+            len: usize
         ) -> bool;
         #[must_use()]
         fn bindInputI32(
@@ -98,7 +105,7 @@ pub mod swift {
             shape: Vec<usize>,
             featureName: String,
             data: *mut i32,
-            len: usize,
+            len: usize
         ) -> bool;
         #[must_use()]
         fn bindInputU16(
@@ -106,7 +113,7 @@ pub mod swift {
             shape: Vec<usize>,
             featureName: String,
             data: *mut u16,
-            len: usize,
+            len: usize
         ) -> bool;
 
         #[swift_bridge(swift_name = "getCompiledPath")]
@@ -160,15 +167,15 @@ fn rust_vec_from_ptr_i32(ptr: *mut i32, len: usize) -> Vec<i32> {
 
 /// performs a memcpy
 fn rust_vec_from_ptr_f32_cpy(ptr: *mut f32, len: usize) -> Vec<f32> {
-    unsafe { std::slice::from_raw_parts(ptr, len) }.to_vec()
+    (unsafe { std::slice::from_raw_parts(ptr, len) }).to_vec()
 }
 /// performs a memcpy
 fn rust_vec_from_ptr_u16_cpy(ptr: *mut u16, len: usize) -> Vec<u16> {
-    unsafe { std::slice::from_raw_parts(ptr, len) }.to_vec()
+    (unsafe { std::slice::from_raw_parts(ptr, len) }).to_vec()
 }
 /// performs a memcpy
 fn rust_vec_from_ptr_i32_cpy(ptr: *mut i32, len: usize) -> Vec<i32> {
-    unsafe { std::slice::from_raw_parts(ptr, len) }.to_vec()
+    (unsafe { std::slice::from_raw_parts(ptr, len) }).to_vec()
 }
 
 fn rust_vec_free_f32(ptr: *mut f32, len: usize) {
