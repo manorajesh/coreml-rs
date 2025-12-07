@@ -115,6 +115,15 @@ pub mod swift {
             data: *mut u16,
             len: usize
         ) -> bool;
+        #[must_use()]
+        fn bindInputCVPixelBuffer(
+            &self,
+            width: usize,
+            height: usize,
+            featureName: String,
+            data: *mut u8,
+            len: usize
+        ) -> bool;
 
         #[swift_bridge(swift_name = "getCompiledPath")]
         fn compiled_path(&self) -> Option<String>;

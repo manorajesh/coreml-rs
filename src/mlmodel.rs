@@ -278,6 +278,20 @@ impl CoreMLModelWithState {
         }
     }
 
+    pub fn add_input_cvpixelbuffer(
+        &mut self,
+        tag: impl AsRef<str>,
+        width: usize,
+        height: usize,
+        bgra_data: Vec<u8>
+    ) -> Result<(), CoreMLError> {
+        match self {
+            CoreMLModelWithState::Unloaded(_, _) => Err(CoreMLError::ModelNotLoaded),
+            CoreMLModelWithState::Loaded(core_mlmodel, _, _) =>
+                core_mlmodel.add_input_cvpixelbuffer(tag, width, height, bgra_data),
+        }
+    }
+
     pub fn predict(&mut self) -> Result<MLModelOutput, CoreMLError> {
         match self {
             CoreMLModelWithState::Unloaded(_, _) => Err(CoreMLError::ModelNotLoaded),
@@ -401,6 +415,48 @@ impl CoreMLModel {
         Ok(())
     }
 
+    pub fn add_input_cvpixelbuffer(
+        &mut self,
+        tag: impl AsRef<str>,
+        width: usize,
+        height: usize,
+        bgra_data: Vec<u8>
+    ) -> Result<(), CoreMLError> {
+        let name = tag.as_ref().to_string();
+        let expected_len = width * height * 4; // 4 bytes per pixel (BGRA)
+
+        if bgra_data.len() != expected_len {
+            return Err(
+                CoreMLError::BadInputShape(
+                    format!(
+                        "Expected {} bytes for {}x{} BGRA image, got {}",
+                        expected_len,
+                        width,
+                        height,
+                        bgra_data.len()
+                    )
+                )
+            );
+        }
+
+        let mut data = bgra_data;
+        if
+            !self.model.bindInputCVPixelBuffer(
+                width,
+                height,
+                name,
+                data.as_mut_ptr(),
+                data.capacity()
+            )
+        {
+            return Err(
+                CoreMLError::UnknownErrorStatic("failed to bind CVPixelBuffer input to model")
+            );
+        }
+        std::mem::forget(data);
+        Ok(())
+    }
+
     pub fn add_output_f32(&mut self, tag: impl AsRef<str>, out: impl Into<MLArray>) -> bool {
         let arr: MLArray = out.into();
         let shape = arr.shape();
@@ -449,29 +505,107 @@ impl CoreMLModel {
 
     pub fn predict(&mut self) -> Result<MLModelOutput, CoreMLError> {
         let desc = self.model.description();
+
+        // Check if we should use output backing (only for fixed-size outputs)
+        let mut use_output_backing = true;
+        let mut output_info = Vec::new();
+
         for name in desc.output_names() {
             let output_shape = desc.output_shape(name.clone());
             let ty = desc.output_type(name.clone());
-            match ty.as_str() {
-                "f32" => {
-                    self.add_output_f32(name, Array::<f32, _>::zeros(output_shape));
-                }
-                "f16" | "float16" => {
-                    self.add_output_u16(name, Array::<u16, _>::zeros(output_shape));
-                }
-                _ => {
-                    return Err(
-                        CoreMLError::UnknownErrorStatic(
-                            "non-f32/f16 output types are not supported (yet)!"
-                        )
-                    );
+
+            // Skip output backing if any dimension is 0 (flexible size)
+            if output_shape.iter().any(|&dim| dim == 0) {
+                use_output_backing = false;
+            }
+
+            output_info.push((name, output_shape, ty));
+        }
+
+        // Only set up output backing for fixed-size outputs
+        if use_output_backing {
+            for (name, output_shape, ty) in &output_info {
+                match ty.as_str() {
+                    "f32" => {
+                        self.add_output_f32(
+                            name.clone(),
+                            Array::<f32, _>::zeros(output_shape.clone())
+                        );
+                    }
+                    "f16" | "float16" => {
+                        self.add_output_u16(
+                            name.clone(),
+                            Array::<u16, _>::zeros(output_shape.clone())
+                        );
+                    }
+                    _ => {
+                        return Err(
+                            CoreMLError::UnknownErrorStatic(
+                                "non-f32/f16 output types are not supported (yet)!"
+                            )
+                        );
+                    }
                 }
             }
         }
+
         let output = self.model.predict();
         if let Some(err) = output.getError() {
             return Err(CoreMLError::UnknownError(err));
         }
+
+        // For flexible outputs, extract directly from Core ML output
+        if !use_output_backing {
+            let mut outputs = HashMap::new();
+            for (name, output_shape, ty) in output_info {
+                match ty.as_str() {
+                    "f32" => {
+                        let out = output.outputF32(name.clone());
+                        // Infer actual shape from output length and declared shape
+                        let actual_shape = if output_shape.len() == 2 && output_shape[0] == 0 {
+                            // Flexible first dimension, calculate it
+                            vec![out.len() / output_shape[1], output_shape[1]]
+                        } else {
+                            // Just use 1D for now
+                            vec![out.len()]
+                        };
+                        if
+                            let Ok(array) = Array::from_shape_vec(
+                                ndarray::IxDyn(&actual_shape),
+                                out
+                            )
+                        {
+                            outputs.insert(name, array.into());
+                        }
+                    }
+                    "f16" | "float16" => {
+                        let out = output.outputU16(name.clone());
+                        let actual_shape = if output_shape.len() == 2 && output_shape[0] == 0 {
+                            vec![out.len() / output_shape[1], output_shape[1]]
+                        } else {
+                            vec![out.len()]
+                        };
+                        if
+                            let Ok(array) = Array::from_shape_vec(
+                                ndarray::IxDyn(&actual_shape),
+                                out
+                            )
+                        {
+                            let f16_array = reinterpret_u16_to_f16(array);
+                            outputs.insert(name, f16_array.into());
+                        }
+                    }
+                    _ => {
+                        eprintln!(
+                            "warning: type not one of f32 or f16, and will be skipped in the output"
+                        );
+                    }
+                }
+            }
+            return Ok(MLModelOutput { outputs });
+        }
+
+        // For fixed-size outputs, use the pre-allocated buffers
         Ok(MLModelOutput {
             outputs: self.outputs
                 .clone()
