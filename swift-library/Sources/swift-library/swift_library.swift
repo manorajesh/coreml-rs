@@ -259,6 +259,8 @@ class ModelOutput {
 		if self.cpy {
 			let out = (output[name.toString()]! as? MLFeatureValue)!.multiArrayValue!
 			let l = out.count
+                if l == 0 { return RustVec.init() }
+			
 			var v = RustVec<Float32>()
 			out.withUnsafeMutableBytes { ptr, strides in
 				let p = ptr.baseAddress!.assumingMemoryBound(to: Float32.self)
@@ -268,6 +270,8 @@ class ModelOutput {
 		} else {
 			let out = (output[name.toString()]! as? MLMultiArray)!
 			let l = out.count
+                if l == 0 { return RustVec.init() }
+			
 			var v = RustVec<Float32>()
 			out.withUnsafeMutableBytes { ptr, strides in
 				let p = ptr.baseAddress!.assumingMemoryBound(to: Float32.self)
@@ -282,6 +286,7 @@ class ModelOutput {
 		let output = self.output!
 		let out = (output[name.toString()]! as? MLMultiArray)!
 		let l = out.count
+                if l == 0 { return RustVec.init() }
 		var v = RustVec<Int32>()
 		out.withUnsafeMutableBytes { ptr, strides in
 			let p = ptr.baseAddress!.assumingMemoryBound(to: Int32.self)
@@ -298,6 +303,7 @@ class ModelOutput {
 		let output = self.output!
 		let out = (output[name.toString()]! as? MLMultiArray)!
 		let l = out.count
+                if l == 0 { return RustVec.init() }
 		var v = RustVec<UInt16>()
 		out.withUnsafeMutableBytes { ptr, strides in
 			let p = ptr.baseAddress!.assumingMemoryBound(to: UInt16.self)
