@@ -194,7 +194,7 @@ checksum = "7c74b8349d32d297c9134b8c88677813a227df8f779daa29bfc29c183fe3dca6"
 
 [[package]]
 name = "coreml-rs-fork"
-version = "0.5.5"
+version = "0.5.6"
 dependencies = [
  "anyhow",
  "bytemuck",
